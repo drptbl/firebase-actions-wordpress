@@ -1,5 +1,4 @@
 <?php
-namespace Firebase;
 
 class FirebaseSettingsPage {
 	/**
@@ -68,17 +67,17 @@ class FirebaseSettingsPage {
 		);
 
 		add_settings_field(
-			'firebase_credentials',
-			'Credentials Path (json)',
-			array( $this, 'firebase_credentials_callback' ),
+			'server_key',
+			'Server key',
+			array( $this, 'server_key_callback' ),
 			'my-setting-admin',
 			'setting_section_id'
 		);
 
 		add_settings_field(
-			'shared_secret', // ID
-			'Secret', // Title
-			array( $this, 'shared_secret_callback' ), // Callback
+			'sender_id', // ID
+			'Sender id', // Title
+			array( $this, 'sender_id_callback' ), // Callback
 			'my-setting-admin', // Page
 			'setting_section_id' // Section
 		);
@@ -92,27 +91,13 @@ class FirebaseSettingsPage {
 	 */
 	public function sanitize( $input ) {
 		$new_input = array();
-		if ( isset( $input['shared_secret'] ) ) {
-			$new_input['shared_secret'] = sanitize_text_field( $input['shared_secret'] );
+		if ( isset( $input['sender_id'] ) ) {
+			$new_input['sender_id'] = sanitize_text_field( $input['sender_id'] );
 		}
 
-		if ( isset( $input['firebase_credentials'] ) ) {
-			$new_input['firebase_credentials'] = sanitize_text_field( $input['firebase_credentials'] );
+		if ( isset( $input['server_key'] ) ) {
+			$new_input['server_key'] = sanitize_text_field( $input['server_key'] );
 		}
-
-		if ( isset( $new_input['firebase_credentials'] ) ) {
-			if ( ! file_exists( $new_input['firebase_credentials'] ) ) {
-				add_settings_error( 'firebase_credentials', 'firebase_credentials',
-					"The file " . $new_input['firebase_credentials'] . " does not exist." );
-			}
-		}
-
-		if ( isset( $new_input['shared_secret'] ) ) {
-			if ( strlen( $new_input['shared_secret'] ) < 10 ) {
-				add_settings_error( 'shared_secret', 'shared_secret', "Please enter a share secret of at least 10 characters" );
-			}
-		}
-
 
 		return $new_input;
 	}
@@ -121,56 +106,33 @@ class FirebaseSettingsPage {
 	 * Print the Section text
 	 */
 	public function print_section_info() {
-		print 'Configure your settings below:'
-		      . '<br/><ul>
-            <li><strong>Credentials path:</strong> The path to a json credential file, saved on your server. This is'
-		      . ' a Firebase service account. You can create this file in the '
-		      . '<a href="https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk">Firebase console</a>.<br/>'
-		      . '<i>You should upload this file to a location on your server that is outside of your www-root</i>.</li>'
-		      . '<li><strong>Secret:</strong> This secret serves as a password you should enter in the app to authenticate</li>'
-		      . '</ul><br/>';
+		print 'Configure your settings below:';
 		$options = get_option( 'fa_options' );
 
 		if ( ! $options ) {
-			print '<b>Warning:</b> No credentials set. Before using this plugin you need to create a service account.';
+			print '<br/><b>Warning:</b> No configuration found. You need to set the server key and sender id first';
 
 			return;
 		}
 
-		$credentials_path = $options['firebase_credentials'];
-		$shared_secret    = $options['shared_secret'];
+		$server_key = $options['server_key'];
+		$sender_id  = $options['sender_id'];
 
+		if ( ! $server_key || ! $sender_id ) {
+			print '<br/><b>Warning:</b> No configuration found. You need to set the server key and sender id first';
 
-		if ( $credentials_path === false ) {
-			print '<b>Warning:</b> No credentials set. Before using this plugin you need to create a service account.' . $credentials_path;
-		} else if ( ! file_exists( $credentials_path ) ) {
-			print '<b>Warning:</b> Credentials path invalid. Check if the file ' . $credentials_path . ' exists.';
-		} else {
-
-			if ( isset( $shared_secret ) && strlen( $shared_secret ) >= 10 ) {
-				try {
-
-					$firebase = \Firebase::fromServiceAccount( $credentials_path );
-					$database = $firebase->getDatabase();
-
-					$database->getReference( 'options/secret' )->set( $shared_secret );
-					print '<b>Configuration working:</b> Firebase database: ' . $firebase->getDatabaseUri();
-				} catch ( \Firebase\Exception\InvalidArgumentException $e ) {
-					print '<b>Error:</b> ' . $e->getMessage();
-				}
-			} else {
-				print '<b>Warning:</b> Secret invalid. Enter a secret of at least 10 characters';
-			}
+			return;
 		}
+
 	}
 
 	/**
 	 * Get the settings option array and print one of its values
 	 */
-	public function shared_secret_callback() {
+	public function sender_id_callback() {
 		printf(
-			'<input type="text" id="shared_secret" name="fa_options[shared_secret]" value="%s" />',
-			isset( $this->options['shared_secret'] ) ? esc_attr( $this->options['shared_secret'] ) : ''
+			'<input type="text" id="sender_id" name="fa_options[sender_id]" value="%s" />',
+			isset( $this->options['sender_id'] ) ? esc_attr( $this->options['sender_id'] ) : ''
 		);
 	}
 
@@ -178,10 +140,10 @@ class FirebaseSettingsPage {
 	/**
 	 * Get the settings option array and print one of its values
 	 */
-	public function firebase_credentials_callback() {
+	public function server_key_callback() {
 		printf(
-			'<input type="text" id="firebase_credentials" name="fa_options[firebase_credentials]" value="%s" />',
-			isset( $this->options['firebase_credentials'] ) ? esc_attr( $this->options['firebase_credentials'] ) : ''
+			'<textarea id="server_key" name="fa_options[server_key]">%s</textarea>',
+			isset( $this->options['server_key'] ) ? esc_attr( $this->options['server_key'] ) : ''
 		);
 	}
 }

@@ -8,11 +8,8 @@
  * Author URI:   https://www.warmbeer.io/about/
  */
 
-namespace Firebase;
-require "vendor/autoload.php";
 
 require_once( "FirebaseSettingsPage.php" );
-require_once( 'Firebase.php' );
 
 
 if ( is_admin() ) {
@@ -33,19 +30,13 @@ function is_configured() {
 	}
 
 
-	$credentialsPath = $options['firebase_credentials'];
-	$shared_secret   = $options['shared_secret'];
+	$credentialsPath = $options['server_key'];
+	$sender_id       = $options['sender_id'];
 	if ( ! $credentialsPath ) {
 		return false;
 	}
-	if ( ! file_exists( $credentialsPath ) ) {
-		return false;
-	}
 
-	if ( ! $shared_secret ) {
-		return false;
-	}
-	if ( strlen( $shared_secret ) < 10 ) {
+	if ( ! $sender_id ) {
 		return false;
 	}
 
@@ -54,30 +45,42 @@ function is_configured() {
 
 
 function _do_post( $refPath, $title, $message, $url ) {
-	$options = get_option( 'fa_options' );
-	$credentialsPath = $options['firebase_credentials'];
-	$expected_secret = $options['shared_secret'];
+	$options         = get_option( 'fa_options' );
+	$server_key = $options['server_key'];
 
-	try {
-		$firebase = \Firebase::fromServiceAccount( $credentialsPath );
-		$database = $firebase->getDatabase();
+	$data = [
+		'title'         => print_r( $title, true ),
+		'body'          => print_r( $message, true ),
+		'url'           => print_r( $url, true ),
+		'request_time'  => print_r( $_SERVER['REQUEST_TIME'], true ),
+		'remote_addr'   => print_r( getenv( 'REMOTE_ADDR' ), true ),
+		'forwarded_for' => print_r( getenv( 'HTTP_FORWARDED_FOR' ), true )
+	];
 
-		$secret = $database->getReference('options/secret')->getValue();
-		if (strcmp($secret, $expected_secret) != 0) {
-			error_log('The secret in firebase does not match with the secret in the config');
-			return;
-		}
+	$topic = '/topics/' . $refPath;
 
-		$newPost = $database->getReference( 'blog/posts/' . $refPath . '/tasks' )->push( [
-			'title'         => $title,
-			'body'          => $message,
-			'url'           => $url,
-			'remote_addr'   => getenv( 'REMOTE_ADDR' ),
-			'forwarded_for' => getenv( 'HTTP_FORWARDED_FOR' )
-		] );
-	} catch ( \Firebase\Exception\InvalidArgumentException $e ) {
-		error_log( $e->getMessage() );
-	}
+	$body = [
+		'data' => $data,
+		'to' => $topic
+	];
+
+	$headers = array
+	(
+		'Authorization: key=' . $server_key,
+		'Content-Type: application/json'
+	);
+
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, 'https://fcm.googleapis.com/fcm/send');
+	curl_setopt($ch, CURLOPT_POST, true);
+	curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+	$result = curl_exec($ch);
+	curl_close($ch);
+	error_log("fcm result: " . $result);
+
 }
 
 function fa_init_save_post( $post_id ) {
@@ -126,5 +129,3 @@ function fa_init_publish_page( $ID, $post ) {
 	_do_post( 'new_page', $subject, $message, $permalink );
 }
 
-
-?>
